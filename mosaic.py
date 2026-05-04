@@ -405,7 +405,7 @@ def apply_glt_noClick(glt_file, raw_files, output_file, nodata_value=-9999, band
         if np.any(glt[...,2] == _file):
             valid_glt = glt[...,2] == _file
 
-            meta, dat = spec_io.load_data(file.strip(), lazy=True, load_glt=False)
+            meta, dat = spec_io.load_data(file.strip(), lazy=False, load_glt=True)
             if bands is None or len(bands) == 0:
                 bands = np.arange(dat.shape[2])
             dat = dat[...,bands]
