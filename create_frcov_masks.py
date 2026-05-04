@@ -49,6 +49,27 @@ def create_masks(rfl_file, l2a_mask_file, glt_file, frcov_mask, urban_data, coas
 
     os.makedirs(output_directory, exist_ok=True)
 
+    ############ Check for coordinate system strings ####
+    with rasterio.open(frcov_mask) as src:
+        target_crs = src.crs
+        res_x, res_y = src.res
+        bounds = [src.bounds.left, src.bounds.bottom, src.bounds.right, src.bounds.top]
+
+    # project urban data to target crs
+    gdal.Warp(f'./test/landcover/complete_landcover_proj.vrt', urban_data, dstSRS=target_crs, format='VRT')
+    urban_data = f'./test/landcover/complete_landcover_proj.vrt'
+
+    # project coastal data to target crs
+    gdf = gpd.read_file(coastal_data)
+    gdf = gdf.to_crs(target_crs)
+    gdf = gdf[~gdf.is_empty]
+
+    # Remove geometries that have non-finite (NaN/Inf) coordinates
+    gdf = gdf[gdf.geometry.notna()]
+    gdf = gdf[gdf.geometry.is_valid]
+    gdf.to_file(f'./test/landcover/{os.path.basename(coastal_data).split(".")[0]}_proj.shp')
+    coastal_data =f'./test/landcover/{os.path.basename(coastal_data).split(".")[0]}_proj.shp'
+
     ############ Generate QC and save to COG ############
 
     # Orthorectify EMIT mask file
@@ -62,11 +83,11 @@ def create_masks(rfl_file, l2a_mask_file, glt_file, frcov_mask, urban_data, coas
 
     # Urban mask and orth
     urban_out_file = os.path.join(output_directory, acq_id + '_ortho_urban.tif')
-    meta = urban_mask_cog(ortho_mask_file, urban_out_file, json_filename, urban_data, ortho_mask_file)
+    meta = urban_mask_cog(ortho_mask_file, urban_out_file, json_filename, urban_data, ortho_mask_file, output_res=res_x, bounds=bounds)
 
     # Coastal mask and ortho
     coastal_out_file = os.path.join(output_directory, acq_id + '_ortho_coastal.tif')
-    coastal_mask_cog(ortho_mask_file, json_filename, coastal_out_file, coastal_data, meta)
+    coastal_mask_cog(ortho_mask_file, json_filename, coastal_out_file, coastal_data, meta, output_res=res_y)
 
     # NDSI (generate and then ortho)
     ndsi_file = os.path.join(output_directory, acq_id + '_ndsi.tif')
@@ -223,7 +244,7 @@ def warp_array_to_ref(array, source_ds, ref_path, nodata_value=0):
     return out_arr
 
 
-def urban_mask_cog(ortho_file, out_file, json_file, urban_data, ref_path, output_res = 0.000542232520256, nodata_value = 0):
+def urban_mask_cog(ortho_file, out_file, json_file, urban_data, ref_path, output_res = 0.000542232520256, nodata_value = 0, bounds=None):
     """
     Generate mask of urban/built-up areas and save as COG
 
@@ -250,15 +271,26 @@ def urban_mask_cog(ortho_file, out_file, json_file, urban_data, ref_path, output
 
     # Build warp options -- coarse clipping to bounding box
     temp_file= os.path.join(os.path.dirname(out_file), os.path.splitext(os.path.basename(out_file))[0]) + '_TEMPclipped.tif'
-    warp_options = gdal.WarpOptions(
-        cutlineDSName=json_file,
-        cropToCutline=True,
-        dstNodata=nodata_value,
-        xRes=output_res,
-        yRes=-output_res,
-        dstSRS=wkt
-    )
-    gdal.Warp(destNameOrDestDS=temp_file, srcDSOrSrcDSTab=urban_data, options=warp_options)
+    if bounds is None:
+        warp_options = gdal.WarpOptions(
+            cutlineDSName=json_file,
+            cropToCutline=True,
+            dstNodata=nodata_value,
+            xRes=output_res,
+            yRes=-output_res,
+            dstSRS=wkt
+        )
+        gdal.Warp(destNameOrDestDS=temp_file, srcDSOrSrcDSTab=urban_data, options=warp_options)
+    else:
+        warp_options = gdal.WarpOptions(
+            format='VRT',
+            dstSRS=wkt,
+            outputBounds=bounds,  # This is the "Magic" fix
+            xRes=output_res,
+            yRes=output_res,
+            resampleAlg='near'  # Use 'near' for masks/categorical data
+        )
+        gdal.Warp(destNameOrDestDS=temp_file, srcDSOrSrcDSTab=urban_data, options=warp_options)
 
     # Generate geotiff mask of urban areas (50 in ESA worldcover)
     meta, _ = open_tif(temp_file)
