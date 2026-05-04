@@ -4,6 +4,7 @@ import netCDF4 as nc
 import os
 import numpy as np
 import logging
+from pyproj import CRS
 
 numpy_to_gdal = {
     np.dtype(np.float64): 7,
@@ -189,7 +190,7 @@ def write_cog(output_file, data, meta, ortho=True, nodata_value=-9999):
         #if meta.band_names is not None:
         #    ds.GetRasterBand(i+1).SetDescription(meta.band_names[i])
     ds.BuildOverviews('NEAREST', [2, 4, 8, 16, 32, 64, 128])
-    
+
     tiff_driver = gdal.GetDriverByName('GTiff')
     output_dataset = tiff_driver.CreateCopy(output_file, ds, options=['COMPRESS=LZW', 'BIGTIFF=YES','COPY_SRC_OVERVIEWS=YES', 'TILED=YES', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256'])
     ds = None
@@ -225,6 +226,7 @@ def open_envi(input_file, lazy=True):
     header = envi_header(input_file)
     ds = envi.open(header)
     imeta = ds.metadata
+
     if 'wavelength' in imeta:
         wl = np.array([float(x) for x in imeta['wavelength']])
     else:
@@ -242,7 +244,29 @@ def open_envi(input_file, lazy=True):
         css = imeta['coordinate system string']
         proj = css if type(css) == str else ','.join(css)
     else:
-        proj = None
+        # FALLBACK: Build projection from 'map info'
+        if 'map info' in imeta:
+            mi = imeta['map info']
+            try:
+                # mi[7] is the UTM zone (10), mi[8] is the hemisphere (North)
+                utm_zone = mi[7]
+                hemisphere = mi[8].lower()
+
+                # Construct the CRS (Coordinate Reference System)
+                # This creates a WKT string (Coordinate System String)
+                crs = CRS.from_dict({
+                    'proj': 'utm',
+                    'zone': utm_zone,
+                    'south': hemisphere == 'south',
+                    'datum': 'WGS84'
+                })
+                proj = crs.to_wkt()
+            except Exception as e:
+                print(f"Could not parse map info for projection: {e}")
+                proj = None
+        else:
+            proj = None
+
     if 'map info' in imeta:
         map_info = imeta['map info'].split(',') if type(imeta['map info']) == str else imeta['map info']
         rotation=0
@@ -252,17 +276,30 @@ def open_envi(input_file, lazy=True):
         trans = [float(map_info[3]), float(map_info[5]), rotation, float(map_info[4]), rotation, -float(map_info[6])]
     else:
         map_info, trans = None, None
-    
+
+    if 'interleave' in imeta:
+        interleave = imeta['interleave']
+    else:
+        interleave = None
+
     glt = None
     if 'glt' in os.path.basename(input_file).lower():
-        glt = ds.open_memmap(interleave='bip').copy()
-    
+        glt = ds.open_memmap().copy()
+
     if lazy:
-        rfl = ds.open_memmap(interleave='bip', writable=False)
+        rfl = ds.open_memmap(interleave=interleave, writable=False)
     else:
-        rfl = ds.open_memmap(interleave='bip').copy()
+        rfl = ds.open_memmap(interleave=interleave)
+
+    if interleave in ['bsq']:
+       rfl = rfl.transpose((1, 2, 0))
+
+    elif interleave in ['bil']:
+        rfl = rfl.transpose((0, 2, 1))
+
 
     meta = SpectralMetadata(wl, fwhm, nodata_value=nodata_value, geotransform=trans, projection=proj, glt=glt)
+
     return meta, rfl
     
 
