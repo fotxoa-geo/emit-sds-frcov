@@ -13,52 +13,52 @@ from spec_io import write_cog, open_tif
 product_metadata = {
     'pv': {
         'cov': {
-            'name': 'EMIT_L2B_FRCOVPV',
+            'name': 'SHIFT_L2B_FRCOVPV',
             'description': 'Photosynthetic Vegetation Fractional Cover Values',
             'units': 'percent'
         },
         'unc': {
-            'name': 'EMIT_L2B_FRCOVPVUNC',
+            'name': 'SHIFT_L2B_FRCOVPVUNC',
             'description': 'Photosynthetic Vegetation Fractional Cover Uncertainty Values',
             'units': 'percent'
         }
     },
     'npv': {
         'cov': {
-            'name': 'EMIT_L2B_FRCOVNPV',
+            'name': 'SHIFT_L2B_FRCOVNPV',
             'description': 'Non-photosynthetic Vegetation Fractional Cover Values',
             'units': 'percent'
         },
         'unc': {
-            'name': 'EMIT_L2B_FRCOVNPVUNC',
+            'name': 'SHIFT_L2B_FRCOVNPVUNC',
             'description': 'Non-photosynthetic Vegetation Fractional Cover Uncertainty Values',
             'units':  'percent'
         }
     },
     'bare': {
         'cov': {
-            'name': 'EMIT_L2B_FRCOVBARE',
+            'name': 'SHIFT_L2B_FRCOVBARE',
             'description': 'Bare Soil Fractional Cover Values',
             'units': 'percent'
         },
         'unc': {
-            'name': 'EMIT_L2B_FRCOVBAREUNC',
+            'name': 'SHIFT_L2B_FRCOVBAREUNC',
             'description': 'Bare Soil Fractional Cover Uncertainty Values',
             'units':  'percent'
         }
     },
     'qc': {
-            'name': 'EMIT_L2B_FRCOVQC',
+            'name': 'SHIFT_L2B_FRCOVQC',
             'description': 'Fractional Cover Quality Flag',
         }
 }
 
 def add_metadata_to_cog(input_file, product_metadata, software_build_version, product_version):
     metadata = {
-        "keywords": "Imaging Spectroscopy, minerals, EMIT, dust, radiative forcing",
-        "sensor": "EMIT (Earth Surface Mineral Dust Source Investigation)",
-        "instrument": "EMIT",
-        "platform": "ISS",
+        "keywords": "Imaging Spectroscopy, SHIFT, Phenology, terrestrial vegetation, fractional cover",
+        "sensor": "AVIRIS-NG ()",
+        "instrument": "AVIRIS-NG",
+        "platform": "King-Air B200",
         "Conventions": "CF-1.63",
         "institution": "NASA Jet Propulsion Laboratory/California Institute of Technology",
         "license": "https://creativecommons.org/publicdomain/zero/1.0/",
@@ -68,10 +68,10 @@ def add_metadata_to_cog(input_file, product_metadata, software_build_version, pr
         "stdname_vocabulary": "NetCDF Climate and Forecast (CF) Metadata Convention",
         "creator_name": "Jet Propulsion Laboratory/California Institute of Technology",
         "creator_url": "https://earth.jpl.nasa.gov/emit/",
-        "project": "Earth Surface Mineral Dust Source Investigation",
-        "project_url": "https://earth.jpl.nasa.gov/emit/",
-        "publisher_name": "NASA LPDAAC",
-        "publisher_url": "https://lpdaac.usgs.gov",
+        "project": "Surface Biology and Geology High-Frequency Time Series (SHIFT)",
+        "project_url": "https://www.earthdata.nasa.gov/data/projects/shift",
+        "publisher_name": "NASA ORNL DAAC",
+        "publisher_url": "https://www.earthdata.nasa.gov/centers/ornl-daac",
         "publisher_email": "lpdaac@usgs.gov",
         "identifier_product_doi_authority": "https://doi.org",
         "software_build_version": software_build_version,
@@ -113,8 +113,6 @@ def apply_mask(frcov_file, frcov_unc_file, mask_file, output_base, glt_file, sof
     output_directory = os.path.dirname(output_base)
     os.makedirs(output_directory, exist_ok=True)
 
-    add_metadata_to_cog(mask_file, product_metadata['qc'], software_version, product_version)  
-
     ortho_frcov_file = output_base + '_frcov_ort.tif'
     apply_glt_noClick(glt_file, frcov_file, ortho_frcov_file, nodata_value=-9999,
                       bands=None, output_format='tif', glt_nodata_value=glt_nodata_value)
@@ -123,8 +121,12 @@ def apply_mask(frcov_file, frcov_unc_file, mask_file, output_base, glt_file, sof
     apply_glt_noClick(glt_file, frcov_unc_file, ortho_frcov_unc_file, nodata_value=-9999,
                       bands=None, output_format='tif', glt_nodata_value=glt_nodata_value)
 
-    _, mask = open_tif(mask_file)
+    ortho_mask_file = output_base + '_frcov_mask.tif'
+    apply_glt_noClick(glt_file, mask_file, ortho_mask_file, nodata_value=-9999,
+                      bands=None, output_format='tif', glt_nodata_value=glt_nodata_value)
 
+    add_metadata_to_cog(ortho_mask_file, product_metadata['qc'], software_version, product_version)
+    _, mask = open_tif(ortho_mask_file)
     frcov_meta, frcov = open_tif(ortho_frcov_file)
     frcov[mask[:,:,0] > 0] = -9999
 
