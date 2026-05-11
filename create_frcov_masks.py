@@ -3,7 +3,6 @@ import click
 import os
 from osgeo import gdal
 import numpy as np
-
 import subprocess
 import geopandas as gpd
 from affine import Affine
@@ -293,7 +292,6 @@ def urban_mask_cog(ortho_file, out_file, json_file, urban_data, ref_path, output
         gdal.Warp(destNameOrDestDS=temp_file, srcDSOrSrcDSTab=urban_data, options=warp_options)
 
     # Generate geotiff mask of urban areas (50 in ESA worldcover)
-    print(temp_file)
     meta, _ = open_tif(temp_file)
     ds = gdal.Open(temp_file)
     band = ds.GetRasterBand(1)
