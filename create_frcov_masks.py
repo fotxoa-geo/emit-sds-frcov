@@ -102,7 +102,7 @@ def create_masks(rfl_file, l2a_mask_file, glt_file, frcov_mask, urban_data, coas
     _, ndsi_mask = open_tif(ndsi_ortho_file)
 
     emit_meta, emit_mask = open_tif(ortho_mask_file)
-    emit_cloud = emit_mask[:,:,9] # SpecTf cloud flag
+    emit_cloud = emit_mask[:,:,0] # SpecTf cloud flag
     emit_cirrus = emit_mask[:,:,1]
     emit_water = emit_mask[:,:,2]
 
@@ -293,6 +293,7 @@ def urban_mask_cog(ortho_file, out_file, json_file, urban_data, ref_path, output
         gdal.Warp(destNameOrDestDS=temp_file, srcDSOrSrcDSTab=urban_data, options=warp_options)
 
     # Generate geotiff mask of urban areas (50 in ESA worldcover)
+    print(temp_file)
     meta, _ = open_tif(temp_file)
     ds = gdal.Open(temp_file)
     band = ds.GetRasterBand(1)
@@ -330,7 +331,9 @@ def coastal_mask_cog(ortho_file, json_file, out_file, coastal_data, meta, output
 
     # Clip large coastal data to approx. tile extent
     tile_extent = gpd.read_file(json_file)
+    tile_extent.crs = "EPSG:32610" # hard code utm ?
     coastal = gpd.read_file(coastal_data)
+    tile_extent = tile_extent.to_crs(coastal.crs)
     clipped = gpd.overlay(coastal, tile_extent, how="intersection")
 
     # Get extent from json
@@ -346,6 +349,16 @@ def coastal_mask_cog(ortho_file, json_file, out_file, coastal_data, meta, output
         ds_mask = gdal.Open(ortho_file)
         if ds_mask is None:
             raise FileNotFoundError(f"Could not open {ortho_file}")
+
+
+        print(width, height)
+        width = ds_mask.RasterXSize
+        height = ds_mask.RasterYSize
+
+        print(width, height)
+        geo_t = ds_mask.GetGeoTransform()
+        transform = Affine.from_gdal(*geo_t)
+
         tile_mask = (ds_mask.GetRasterBand(1).ReadAsArray() != -9999)
 
         # Land = 0,  Water = 1
