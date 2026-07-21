@@ -113,15 +113,15 @@ def apply_mask(frcov_file, frcov_unc_file, mask_file, output_base, glt_file, sof
     output_directory = os.path.dirname(output_base)
     os.makedirs(output_directory, exist_ok=True)
 
-    ortho_frcov_file = output_base + '_frcov_ort.tif'
+    ortho_frcov_file = os.path.join(output_directory, os.path.basename(frcov_file) + '_frcov_ort.tif')
     apply_glt_noClick(glt_file, frcov_file, ortho_frcov_file, nodata_value=-9999,
                       bands=None, output_format='tif', glt_nodata_value=glt_nodata_value)
 
-    ortho_frcov_unc_file = output_base + '_frcov_unc_ort.tif'
+    ortho_frcov_unc_file = os.path.join(output_directory, os.path.basename(frcov_file) + '_frcov_unc_ort.tif')
     apply_glt_noClick(glt_file, frcov_unc_file, ortho_frcov_unc_file, nodata_value=-9999,
                       bands=None, output_format='tif', glt_nodata_value=glt_nodata_value)
 
-    ortho_mask_file = output_base + '_frcov_mask.tif'
+    ortho_mask_file =  os.path.join(output_directory, os.path.basename(frcov_file) + '_frcov_mask.tif')
     apply_glt_noClick(glt_file, mask_file, ortho_mask_file, nodata_value=-9999,
                       bands=None, output_format='tif', glt_nodata_value=glt_nodata_value)
 
@@ -136,8 +136,8 @@ def apply_mask(frcov_file, frcov_unc_file, mask_file, output_base, glt_file, sof
     cover_types = ['npv', 'pv', 'bare']
     
     for band in range(3):
-        masked_ortho_frcov_file = os.path.join(output_directory, output_base + f'_frcov_{cover_types[band]}.tif')
-        masked_ortho_frcov_unc_file = os.path.join(output_directory, output_base  + f'_frcovunc_{cover_types[band]}.tif')
+        masked_ortho_frcov_file = os.path.join(output_directory, f'{os.path.basename(frcov_file)}_frcov_{cover_types[band]}.tif')
+        masked_ortho_frcov_unc_file = os.path.join(output_directory,  f'{os.path.basename(frcov_file)}_frcovunc_{cover_types[band]}.tif')
         
         write_cog(masked_ortho_frcov_file, frcov[:,:,[band]], frcov_meta)
         write_cog(masked_ortho_frcov_unc_file, frcov_unc[:,:,[band]], frcov_unc_meta)
@@ -154,7 +154,7 @@ def apply_mask(frcov_file, frcov_unc_file, mask_file, output_base, glt_file, sof
     rgb = (rgb * 255).astype(np.uint8)
     alpha = np.where(mask[:,:,0] == -9999, 0, 255).astype(np.uint8)
     rgba = np.dstack([rgb, alpha])
-    png_path = os.path.join(output_directory, output_base + '_frcov.png')
+    png_path = os.path.join(output_directory, f'{os.path.basename(frcov_file)}_frcov_.png')
     Image.fromarray(rgba, mode='RGBA').save(png_path)
      
 def main():
